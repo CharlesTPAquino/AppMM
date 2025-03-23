@@ -19,11 +19,12 @@ app.use(express.json());
 const connectDB = async () => {
     try {
         console.log("🔄 Tentando conectar ao MongoDB Atlas...");
-        console.log("URI:", process.env.MONGO_URI); // Para debug - remover em produção
+        const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI; // Tenta ambas as variáveis
+        console.log("Tentando conectar ao banco de dados...");
         
-        const conn = await mongoose.connect(process.env.MONGO_URI, {
-            serverSelectionTimeoutMS: 5000, // Timeout após 5 segundos
-            socketTimeoutMS: 45000, // Tempo limite do socket
+        const conn = await mongoose.connect(mongoUri, {
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
         });
         
         console.log(`✅ MongoDB Atlas conectado com sucesso!`);
