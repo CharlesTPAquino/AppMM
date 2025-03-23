@@ -8,7 +8,8 @@ const app = express();
 // Configuração CORS
 const corsOptions = {
     origin: process.env.FRONTEND_URL || ["http://localhost:3000", "https://registro-producao.vercel.app"],
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200,
+    credentials: true
 };
 
 // Middleware
@@ -19,21 +20,50 @@ app.use(express.json());
 const connectDB = async () => {
     try {
         console.log("🔄 Tentando conectar ao MongoDB Atlas...");
-        const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI; // Tenta ambas as variáveis
-        console.log("Tentando conectar ao banco de dados...");
+        const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+        
+        if (!mongoUri) {
+            throw new Error("URI do MongoDB não encontrada nas variáveis de ambiente!");
+        }
+        
+        console.log("URI:", mongoUri);
         
         const conn = await mongoose.connect(mongoUri, {
-            serverSelectionTimeoutMS: 5000,
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 10000,
             socketTimeoutMS: 45000,
+            family: 4,
+            retryWrites: true,
+            w: "majority"
         });
         
         console.log(`✅ MongoDB Atlas conectado com sucesso!`);
+        console.log(`📊 Database: ${conn.connection.name}`);
+        console.log(`🌐 Host: ${conn.connection.host}`);
+        
+        // Evento de erro na conexão
+        mongoose.connection.on('error', (err) => {
+            console.error('❌ Erro na conexão MongoDB:', err);
+        });
+
+        // Evento de desconexão
+        mongoose.connection.on('disconnected', () => {
+            console.log('🔌 Desconectado do MongoDB');
+        });
+
+        // Evento de reconexão
+        mongoose.connection.on('reconnected', () => {
+            console.log('🔄 Reconectado ao MongoDB');
+        });
+        
         return conn;
     } catch (err) {
         console.error("❌ Erro ao conectar com MongoDB Atlas:");
+        console.error("URI:", mongoUri ? mongoUri.replace(/:[^:/@]+@/, ':****@') : 'undefined');
         console.error("Mensagem:", err.message);
         if (err.code) console.error("Código do erro:", err.code);
-        process.exit(1);
+        throw err;
     }
 };
 
@@ -42,7 +72,8 @@ app.get("/", (req, res) => {
     res.json({ 
         message: "API de Registro de Produção - Status: Online",
         mongodb_status: mongoose.connection.readyState === 1 ? "Conectado" : "Desconectado",
-        environment: process.env.NODE_ENV || 'development'
+        environment: process.env.NODE_ENV || 'development',
+        version: "1.0.0"
     });
 });
 
@@ -55,33 +86,69 @@ app.use((err, req, res, next) => {
     console.error("Erro na aplicação:", err);
     res.status(500).json({ 
         message: "Erro interno do servidor",
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        error: process.env.NODE_ENV === 'development' ? err.message : 'Erro interno do servidor'
     });
 });
 
 // Inicialização do servidor
 const PORT = process.env.PORT || 5000;
+let server;
+
 const startServer = async () => {
     try {
-        const conn = await connectDB();
+        await connectDB();
         
-        app.listen(PORT, () => {
+        server = app.listen(PORT, () => {
             console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
             console.log('📝 Endpoints disponíveis:');
             console.log('   - GET  /api/registros');
             console.log('   - POST /api/registros');
         });
+
+        // Tratamento gracioso de desligamento
+        process.on('SIGTERM', () => {
+            console.log('Recebido SIGTERM. Iniciando desligamento gracioso...');
+            shutdown();
+        });
+
+        process.on('SIGINT', () => {
+            console.log('Recebido SIGINT. Iniciando desligamento gracioso...');
+            shutdown();
+        });
+
     } catch (err) {
         console.error("❌ Erro ao iniciar o servidor:", err);
         process.exit(1);
     }
 };
 
+// Função de desligamento gracioso
+const shutdown = async () => {
+    console.log('Iniciando desligamento do servidor...');
+    
+    if (server) {
+        server.close(() => {
+            console.log('Servidor HTTP fechado.');
+            mongoose.connection.close(false, () => {
+                console.log('Conexão MongoDB fechada.');
+                process.exit(0);
+            });
+        });
+    } else {
+        process.exit(0);
+    }
+    
+    // Força o encerramento após 10 segundos
+    setTimeout(() => {
+        console.error('Não foi possível encerrar graciosamente, forçando encerramento');
+        process.exit(1);
+    }, 10000);
+};
+
 // Tratamento de erros não capturados
 process.on('unhandledRejection', (err) => {
     console.error('❌ Erro não tratado:', err);
-    // Fecha o servidor graciosamente
-    server.close(() => process.exit(1));
+    shutdown();
 });
 
 startServer();
