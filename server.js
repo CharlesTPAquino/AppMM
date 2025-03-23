@@ -124,16 +124,25 @@ const startServer = async () => {
 const shutdown = async () => {
     console.log('Iniciando desligamento do servidor...');
     
-    if (server) {
-        server.close(() => {
-            console.log('Servidor HTTP fechado.');
-            mongoose.connection.close(false, () => {
-                console.log('Conexão MongoDB fechada.');
-                process.exit(0);
+    try {
+        if (server) {
+            await new Promise((resolve) => {
+                server.close(() => {
+                    console.log('Servidor HTTP fechado.');
+                    resolve();
+                });
             });
-        });
-    } else {
+        }
+        
+        if (mongoose.connection.readyState !== 0) {
+            await mongoose.disconnect();
+            console.log('Conexão MongoDB fechada.');
+        }
+        
         process.exit(0);
+    } catch (err) {
+        console.error('Erro durante o desligamento:', err);
+        process.exit(1);
     }
     
     // Força o encerramento após 10 segundos
