@@ -19,10 +19,15 @@
   "description": "",
   "dependencies": {
     "cors": "^2.8.5",
+    "date": "^2.0.6",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "minimist": "^1.2.8",
     "mongodb": "^6.15.0",
-    "mongoose": "^8.12.1"
+    "mongoose": "^8.12.1",
+    "optimist": "^0.5.2",
+    "to": "^0.2.9",
+    "up": "^1.0.2"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
