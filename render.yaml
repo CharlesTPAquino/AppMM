@@ -5,7 +5,7 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     envVars:
-      - key: MONGO_URI
+      - key: MONGODB_URI
         sync: false
       - key: PORT
         value: 8080
